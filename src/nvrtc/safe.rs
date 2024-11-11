@@ -88,7 +88,7 @@ pub fn compile_ptx_with_opts<S: AsRef<str>>(
     src: S,
     opts: CompileOptions,
 ) -> Result<Ptx, CompileError> {
-    let prog = Program::create(src)?;
+    let prog = Program::create(src.as_ref(), opts.name.as_ref().map(String::as_str).unwrap_or("default_program"))?;
     prog.compile(opts)
 }
 
@@ -97,8 +97,8 @@ pub(crate) struct Program {
 }
 
 impl Program {
-    pub(crate) fn create<S: AsRef<str>>(src: S) -> Result<Self, CompileError> {
-        let prog = result::create_program(src).map_err(CompileError::CreationError)?;
+    pub(crate) fn create<S: AsRef<str>>(src: S, name:S ) -> Result<Self, CompileError> {
+        let prog = result::create_program(src, name).map_err(CompileError::CreationError)?;
         Ok(Self { prog })
     }
 
@@ -186,6 +186,7 @@ impl std::error::Error for CompileError {}
 /// ```
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
 pub struct CompileOptions {
+    pub name: Option<String>,
     pub ftz: Option<bool>,
     pub prec_sqrt: Option<bool>,
     pub prec_div: Option<bool>,

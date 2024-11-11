@@ -39,17 +39,18 @@ impl std::error::Error for NvrtcError {}
 /// Example:
 /// ```rust
 /// # use cudarc::nvrtc::result::*;
-/// let prog = create_program("extern \"C\" __global__ void kernel() { }").unwrap();
+/// let prog = create_program("extern \"C\" __global__ void kernel() { }", "default").unwrap();
 /// ```
-pub fn create_program<S: AsRef<str>>(src: S) -> Result<sys::nvrtcProgram, NvrtcError> {
+pub fn create_program<S: AsRef<str>>(src: S, name: S) -> Result<sys::nvrtcProgram, NvrtcError> {
     let src_c = CString::new(src.as_ref()).unwrap();
+    let name_c = CString::new(name.as_ref()).unwrap();
     let mut prog = MaybeUninit::uninit();
     unsafe {
         lib()
             .nvrtcCreateProgram(
                 prog.as_mut_ptr(),
                 src_c.as_c_str().as_ptr(),
-                std::ptr::null(),
+                name_c.as_c_str().as_ptr(),
                 0,
                 std::ptr::null(),
                 std::ptr::null(),
@@ -68,7 +69,7 @@ pub fn create_program<S: AsRef<str>>(src: S) -> Result<sys::nvrtcProgram, NvrtcE
 ///
 /// ```rust
 /// # use cudarc::nvrtc::result::*;
-/// let prog = create_program("extern \"C\" __global__ void kernel() { }").unwrap();
+/// let prog = create_program("extern \"C\" __global__ void kernel() { }", "default").unwrap();
 /// unsafe { compile_program(prog, &["--ftz=true", "--fmad=true"]) }.unwrap();
 /// ```
 ///
@@ -152,28 +153,28 @@ mod tests {
 
     #[test]
     fn test_compile_program_no_opts() {
-        let prog = create_program("extern \"C\" __global__ void kernel() { }").unwrap();
+        let prog = create_program("extern \"C\" __global__ void kernel() { }", "default").unwrap();
         unsafe { compile_program::<&str>(prog, &[]) }.unwrap();
         unsafe { destroy_program(prog) }.unwrap();
     }
 
     #[test]
     fn test_compile_program_1_opt() {
-        let prog = create_program("extern \"C\" __global__ void kernel() { }").unwrap();
+        let prog = create_program("extern \"C\" __global__ void kernel() { }", "default").unwrap();
         unsafe { compile_program(prog, &["--ftz=true"]) }.unwrap();
         unsafe { destroy_program(prog) }.unwrap();
     }
 
     #[test]
     fn test_compile_program_2_opt() {
-        let prog = create_program("extern \"C\" __global__ void kernel() { }").unwrap();
+        let prog = create_program("extern \"C\" __global__ void kernel() { }", "default").unwrap();
         unsafe { compile_program(prog, &["--ftz=true", "--fmad=true"]) }.unwrap();
         unsafe { destroy_program(prog) }.unwrap();
     }
 
     #[test]
     fn test_compile_bad_program() {
-        let prog = create_program("extern \"C\" __global__ void kernel(").unwrap();
+        let prog = create_program("extern \"C\" __global__ void kernel(", "default").unwrap();
         assert_eq!(
             unsafe { compile_program::<&str>(prog, &[]) }.unwrap_err(),
             NvrtcError(sys::nvrtcResult::NVRTC_ERROR_COMPILATION)
@@ -189,7 +190,7 @@ mod tests {
                 out[i] = sin(inp[i]);
             }
         }";
-        let prog = create_program(SRC).unwrap();
+        let prog = create_program(SRC, "default").unwrap();
         unsafe { compile_program::<&str>(prog, &[]) }.unwrap();
         let ptx = unsafe { get_ptx(prog) }.unwrap();
         assert!(!ptx.is_empty());

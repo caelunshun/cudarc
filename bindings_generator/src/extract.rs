@@ -2,9 +2,30 @@ use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use indicatif::{MultiProgress, ProgressBar};
 use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use tar::Archive;
 use xz2::read::XzDecoder;
+
+/// Directories holding compiled artifacts, docs and samples. Only headers are fed to
+/// bindgen, and unpacking everything for every toolkit version needs tens of GB of disk,
+/// so these are skipped.
+const SKIPPED_DIRS: [&str; 6] = ["lib", "lib64", "bin", "doc", "docs", "samples"];
+
+/// Unpack every archive entry that isn't part of [`SKIPPED_DIRS`].
+fn unpack_headers<R: Read>(archive: &mut Archive<R>, destination: &Path) -> Result<()> {
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.into_owned();
+        let skipped = path
+            .components()
+            .any(|c| SKIPPED_DIRS.iter().any(|d| c.as_os_str() == *d));
+        if !skipped {
+            entry.unpack_in(destination)?;
+        }
+    }
+    Ok(())
+}
 
 fn extract_tar_gz(tarball_path: &Path) -> Result<PathBuf> {
     let output_dir = match tarball_path.extension().and_then(|s| s.to_str()) {
@@ -23,15 +44,13 @@ fn extract_tar_gz(tarball_path: &Path) -> Result<PathBuf> {
     let decompressed = GzDecoder::new(tarball);
     let mut archive = Archive::new(decompressed);
 
-    archive
-        .unpack(tarball_path.parent().unwrap())
-        .with_context(|| {
-            format!(
-                "Failed to unpack {} to {}",
-                tarball_path.display(),
-                output_dir.display()
-            )
-        })?;
+    unpack_headers(&mut archive, tarball_path.parent().unwrap()).with_context(|| {
+        format!(
+            "Failed to unpack {} to {}",
+            tarball_path.display(),
+            output_dir.display()
+        )
+    })?;
 
     Ok(output_dir)
 }
@@ -53,15 +72,13 @@ fn extract_tar_xz(tarball_path: &Path) -> Result<PathBuf> {
     let decompressed = XzDecoder::new(tarball);
     let mut archive = Archive::new(decompressed);
 
-    archive
-        .unpack(tarball_path.parent().unwrap())
-        .with_context(|| {
-            format!(
-                "Failed to unpack {} to {}",
-                tarball_path.display(),
-                output_dir.display()
-            )
-        })?;
+    unpack_headers(&mut archive, tarball_path.parent().unwrap()).with_context(|| {
+        format!(
+            "Failed to unpack {} to {}",
+            tarball_path.display(),
+            output_dir.display()
+        )
+    })?;
 
     Ok(output_dir)
 }
